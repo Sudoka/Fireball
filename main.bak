@@ -1,0 +1,633 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <iostream>
+#include <GLUT/glut.h>
+#include "Camera.h"
+#include "objreader.h"
+
+
+using namespace std;
+#include<string>
+
+int pgmWidth,pgmHeight;
+
+////for readobj
+int nVerts=0;
+float *vertices;
+float *normals;
+float *texcoords;
+int nIndices=0;
+int *indices;
+double maxMagnitude;
+double * midPtr;
+//readOBJ* objArr=new readOBJ[5]; //each OBJ gets an object that has nVerts,vertices,etc...
+const int numObjs=3;
+char* objFileArray[]={"dragon.obj","head_n.obj","bunny_n.obj"};
+
+
+struct ReadOBJ{
+  int nVerts;
+  float *vertices;
+  float *normals;
+  float *texcoords;
+  int nIndices;
+  int *indices;
+  double maxMagnitude; //the biggest magnitude of all vertices
+  double* maxVertex;//xyz 
+  double* minVertex;//xyz
+  char * fileName;
+  double* midPtr;
+  float * colors;
+};
+ ReadOBJ* objArr=new ReadOBJ[numObjs];
+int objIdx=2;
+//ObjReader::readObj("teapot.obj", nVerts, &vertices, &normals, &texcoords, nIndices, &indices);
+float *colors;;//pointer to colors array
+bool isSpin=false;
+bool isAdjust=true;
+bool keepDrawing=false; //tell whether to redraw or not
+
+//Parses through all the OBJ files and stores in an array
+void parseOBJs()
+{
+	printf("Parsing ALL OBJ files....\n");
+	for(int k=0;k<numObjs;k++)
+	{
+
+		//int nVerts;
+		//float *vertices;
+		//float *normals;
+		//float *texcoords;
+		//int nIndices;
+		//int *indices;
+		//double maxMagnitude; //the biggest magnitude of all vertices
+		//double* maxVertex;//xyz 
+		//double* minVertex;//xyz
+		//char * fileName;
+
+		objArr[k].fileName=objFileArray[k];//assign file name to object
+		
+		//initialize each obj with OBJ attributes
+		ObjReader::readObj(objFileArray[k], objArr[k].nVerts, &(objArr[k].vertices), &(objArr[k].normals), 
+			&(objArr[k].texcoords), objArr[k].nIndices, &(objArr[k].indices));
+
+		nVerts=objArr[k].nVerts;
+		vertices=objArr[k].vertices;
+		normals=objArr[k].normals;
+		texcoords=objArr[k].texcoords;
+		nIndices=objArr[k].nIndices;
+		indices=objArr[k].indices;
+
+		objArr[k].colors= new float[nVerts*3];
+		for(int i=0;i<nVerts;i++){
+		  objArr[k].colors[i*3]=rand()&1;
+		  objArr[k].colors[i*3+1]=rand()&1;
+		  objArr[k].colors[i*3+2]=0;
+		}
+
+
+		printf("======= ");
+		printf(objFileArray[k]);
+		printf(" =======:\n");
+		cout <<"nVerts:"<<nVerts <<" nIndices:"<<nIndices<<"\n";
+		
+
+		double* tmpMaxVertex=new double[3];;//xyz
+		double* tmpMinVertex=new double[3];;//xyz
+		double magnitudeArr[]={0,0,0,0,0}; 
+
+		tmpMaxVertex[0]=tmpMaxVertex[1]=tmpMaxVertex[2]=-1000000;
+		tmpMinVertex[0]=tmpMinVertex[1]=tmpMinVertex[2]=1000000;
+
+
+		float maxMagn=-100000;
+		float tmpMax=-100000;
+		int maxMagnIdx=-1;
+		 //find min/max xyz coordinates AND find vertex with largest magnitude
+  		for (int i = 0; i<nIndices; i++) {
+			if((objArr[k]).vertices[(objArr[k]).indices[i] * 3 + 0]>tmpMaxVertex[0]) tmpMaxVertex[0]=(objArr[k]).vertices[(objArr[k]).indices[i]*3+0]; //x max 
+			if((objArr[k]).vertices[(objArr[k]).indices[i] * 3 + 1]>tmpMaxVertex[1]) tmpMaxVertex[1]=(objArr[k]).vertices[(objArr[k]).indices[i]*3+1]; //y max
+			if((objArr[k]).vertices[(objArr[k]).indices[i] * 3 + 2]>tmpMaxVertex[2]) tmpMaxVertex[2]=(objArr[k]).vertices[(objArr[k]).indices[i]*3+2]; //x max
+
+			if(vertices[indices[i] * 3 + 0]<tmpMinVertex[0]) tmpMinVertex[0]=vertices[indices[i]*3+0]; //x min
+			if(vertices[indices[i] * 3 + 1]<tmpMinVertex[1]) tmpMinVertex[1]=vertices[indices[i]*3+1]; //y min
+			if(vertices[indices[i] * 3 + 2]<tmpMinVertex[2]) tmpMinVertex[2]=vertices[indices[i]*3+2]; //x min
+			
+			float x=vertices[indices[i] * 3 + 0];
+			float y=vertices[indices[i] * 3 + 1];
+			float z=vertices[indices[i] * 3 + 2];
+			
+			//find index with highest magnitude from vertex
+			Vector3* tmpVec=new Vector3(x,y,z);
+			tmpMax=tmpVec->magnitude();
+			if(tmpMax>maxMagn){
+				maxMagnIdx=i;
+				maxMagn=tmpMax;
+			}
+		}//end for i
+			printf("max x:%4.2f y:%4.2f z:%4.2f\n",tmpMaxVertex[0],tmpMaxVertex[1],tmpMaxVertex[2]);
+			printf("min x:%4.2f y:%4.2f z:%4.2f\n",tmpMinVertex[0],tmpMinVertex[1],tmpMinVertex[2]);
+			printf("max magnitude:%4.2f @ index:%d\n",maxMagn,maxMagnIdx);
+			objArr[k].maxMagnitude=maxMagn;
+			objArr[k].midPtr=new double[3];
+			objArr[k].midPtr[0]=(tmpMaxVertex[0]-tmpMinVertex[0])/2+tmpMinVertex[0];
+			objArr[k].midPtr[1]=(tmpMaxVertex[1]-tmpMinVertex[1])/2+tmpMinVertex[1];	
+			objArr[k].midPtr[2]=(tmpMaxVertex[2]-tmpMinVertex[2])/2+tmpMinVertex[2];
+			printf("midpoint(%4.2f,%4.2f,%4.2f)\n",objArr[k].midPtr[0],objArr[k].midPtr[1],objArr[k].midPtr[2]);
+			
+
+	}//end for k OBJfiles
+}//end parseOBJs
+
+class Window	  // output window related routines
+{
+  public:
+    static int width, height; 	            // window size
+
+    static void idleCallback(void);
+    static void reshapeCallback(int, int);
+    static void displayCallback(void);
+	static void processNormalKeys(unsigned char,int,int);
+	static void processSpecialKeys(int,int,int);
+};
+
+
+//static Camera* camPtr=new Camera();
+static Camera* camPtr=new Camera(-15,5,10,  -5,0,0,		 0,1,0.5		); //left corner top
+//static Camera* camPtr=new Camera(0,0,15,  0,0,0,	 0,1,0		); //e,d,up top front
+//static Camera* camPtr;
+//static Camera* camPtr=new Camera(0,0,10,  0,0,0,	 0,1,0		); //camera for facing front OBJ drawings
+
+static void foo(){
+printf("FAFAF\n");
+
+}
+
+//------------------------
+static void drawObj()
+{
+//ObjReader::readObj(objFileArray[objIdx], nVerts, &vertices, &normals, &texcoords, nIndices, &indices);
+glMatrixMode(GL_MODELVIEW);
+
+if(isSpin)
+	camPtr->spin();
+ glLoadMatrixd(camPtr->getCameraMatrix().getPointer());
+ // glLoadMatrixd(Matrix4( 1,0,0,0,					0,.707214,-.707214,0, 					0,.707214,.707214,-14.1443,						0,0,0,1).getPointer());
+//OR
+//gluLookAt(0,10,10, 0,0,0,  0,1,0);
+//gluLookAt(-15,5,10, -5,0,0,  0,1,0.5);
+
+
+
+if(isAdjust){
+	
+	double mag;
+	mag=maxMagnitude/15;
+	glBegin(GL_TRIANGLES);
+	for (int i = 0; i<nIndices; i++) {
+		//glColor3f(colors[indices[i] * 3], colors[indices[i] * 3+1], colors[indices[i] * 3 +2]); //* 3 to get to next tuple(of three)
+		glColor3f(1,1,1);
+		glVertex3f(vertices[indices[i] * 3]/mag, vertices[indices[i] * 3 + 1]/mag, vertices[indices[i] * 3 +2]/mag);
+	}//end for i
+	glEnd();
+
+
+}
+else{
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_COLOR_ARRAY);
+
+	glVertexPointer(3, GL_FLOAT, 0, vertices);
+	glColorPointer(3, GL_FLOAT,0, colors);
+
+	glDrawElements(GL_TRIANGLES, nIndices, GL_UNSIGNED_INT, indices);
+
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
+
+/*
+	glBegin(GL_TRIANGLES);
+	for (int i = 0; i<nIndices; i++) {
+		glColor3f(colors[indices[i] * 3], colors[indices[i] * 3+1], colors[indices[i] * 3 +2]); //* 3 to get to next tuple(of three)
+		glVertex3f(vertices[indices[i] * 3], vertices[indices[i] * 3 + 1], vertices[indices[i] * 3 +2]);
+	}//end for i
+	glEnd();
+*/
+}
+
+}//end drawObj()
+
+
+void changeObj()
+{
+
+	//delete(vertices);
+	//delete(normals);
+	//delete(indices);
+	
+
+	//ObjReader::readObj(objFileArray[objIdx], nVerts, &vertices, &normals, &texcoords, nIndices, &indices);
+	nVerts=objArr[objIdx].nVerts;
+	vertices=objArr[objIdx].vertices;
+	normals=objArr[objIdx].normals;
+	texcoords=objArr[objIdx].texcoords;
+	nIndices=objArr[objIdx].nIndices;
+	indices=objArr[objIdx].indices;
+	maxMagnitude=objArr[objIdx].maxMagnitude;
+	midPtr=objArr[objIdx].midPtr;
+	printf("change Obj-----%3.2f,%3.2f,%3.2f\n",(float)-midPtr[0],(float)-midPtr[1],(float)-midPtr[2]);
+	//adjust camera to make model appear on 0,0,0
+	//camPtr->c->translate((float)3*midPtr[0],(float)3*midPtr[1],(float)3*midPtr[2]);
+	//camPtr->c->assign(*(camPtr->c->getIdentityM()));
+	camPtr->c->translate((float)midPtr[0],(float)midPtr[1],(float)midPtr[2]);
+	
+	//42
+  // These are the RGB colors corresponding to the vertices, in the same order
+	colors=objArr[objIdx].colors;;
+	/*
+  delete(colors);
+  colors=new float[nVerts*3];
+
+	//sets the color RGB 3 #'s AND finds max/min vertex x,y,z coordinates
+  for(int i=0;i<nVerts;i++)
+  {
+	colors[i*3]=rand()&1;//((float)rand())/RAND_MAX ;
+	colors[i*3+1]=rand()&1;//((float)rand())/RAND_MAX ;
+	colors[i*3+2]=0;//rand()&1;//((float)rand())/RAND_MAX ;
+
+  }//end for i
+	*/
+
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  // clear color and depth buffers
+  drawObj();
+
+}//end changeObj
+
+
+
+void drawHouse(){
+  printf("drawHouse--objIdx=%d\n",objIdx);
+	// This data structure defines a simple house
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  // clear color and depth buffers
+  int nVerts = 42;    // your vertex array needs to have this many entries
+  
+  // These are the x,y,z coordinates of the vertices of the triangles .VERTEX CLOUD
+  float vertices[] = {  
+            -4,-4,4, 4,-4,4, 4,4,4, -4,4,4,     // front face
+            -4,-4,-4, -4,-4,4, -4,4,4, -4,4,-4, // left face
+            4,-4,-4,-4,-4,-4, -4,4,-4, 4,4,-4,  // back face
+            4,-4,4, 4,-4,-4, 4,4,-4, 4,4,4,     // right face
+            4,4,4, 4,4,-4, -4,4,-4, -4,4,4,     // top face
+            -4,-4,4, -4,-4,-4, 4,-4,-4, 4,-4,4, // bottom face
+
+            -20,-4,20, 20,-4,20, 20,-4,-20, -20,-4,-20, // grass
+            -4,4,4, 4,4,4, 0,8,4,                       // front attic wall
+            4,4,4, 4,4,-4, 0,8,-4, 0,8,4,               // left slope
+            -4,4,4, 0,8,4, 0,8,-4, -4,4,-4,             // right slope
+            4,4,-4, -4,4,-4, 0,8,-4};                   // rear attic wall
+
+  // These are the RGB colors corresponding to the vertices, in the same order
+  float colors[] = { 
+            1,0,0, 1,0,0, 1,0,0, 1,0,0,  // front is red
+            0,1,0, 0,1,0, 0,1,0, 0,1,0,  // left is green
+            1,0,0, 1,0,0, 1,0,0, 1,0,0,  // back is red
+            0,1,0, 0,1,0, 0,1,0, 0,1,0,  // right is green
+            0,0,1, 0,0,1, 0,0,1, 0,0,1,  // top is blue
+            0,0,1, 0,0,1, 0,0,1, 0,0,1,  // bottom is blue
+  
+            0,0.5,0, 0,0.5,0, 0,0.5,0, 0,0.5,0, // grass is dark green
+            0,0,1, 0,0,1, 0,0,1,                // front attic wall is blue
+            1,0,0, 1,0,0, 1,0,0, 1,0,0,         // left slope is green
+            0,1,0, 0,1,0, 0,1,0, 0,1,0,         // right slope is red
+            0,0,1, 0,0,1, 0,0,1,};              // rear attic wall is red
+
+	// The index data stores the connectivity of the triangles; 
+	// index 0 refers to the first triangle defined above. 
+	//60 ELEMENTS
+	unsigned int indices[] = {
+            0,2,3,    0,1,2,      // front face
+            4,6,7,    4,5,6,      // left face
+            8,10,11,  8,9,10,     // back face
+            12,14,15, 12,13,14,   // right face
+            16,18,19, 16,17,18,   // top face
+            20,22,23, 20,21,22,   // bottom face
+                   
+            24,26,27, 24,25,26,   // grass
+            28,29,30,             // front attic wall
+            31,33,34, 31,32,33,   // left slope
+            35,37,38, 35,36,37,   // right slope
+            39,40,41};            // rear attic wall
+//60 indices
+
+glEnableClientState(GL_VERTEX_ARRAY);
+glEnableClientState(GL_COLOR_ARRAY);
+
+glVertexPointer(3, GL_FLOAT, 0, vertices);
+glColorPointer(3, GL_FLOAT,0, colors);
+
+glDrawElements(GL_TRIANGLES, 60, GL_UNSIGNED_INT, indices);
+glDisableClientState(GL_VERTEX_ARRAY);
+glDisableClientState(GL_COLOR_ARRAY);
+
+/*
+glBegin(GL_TRIANGLES);
+for (int i = 0; i<60; i++) {
+	glColor3f(colors[indices[i] * 3], colors[indices[i] * 3+1], colors[indices[i] * 3 +2]); //* 3 to get to next tuple(of three)
+	glVertex3f(vertices[indices[i] * 3], vertices[indices[i] * 3 + 1], vertices[indices[i] * 3 +2]);
+}//end for i
+glEnd();
+*/
+
+
+glMatrixMode(GL_MODELVIEW);
+ Matrix4 M(1,0,0,-10,
+			0,1,0,0,
+			0,0,1,0,
+			 0,0,0,1);
+ printf("M:\n");
+ M.print();
+
+ Matrix4 L(1,0,0,0,
+			0,1,0,10,
+			0,0,1,0,
+			0, 0,0,1);
+
+ printf("L:\n");
+ L.print();
+ 
+ printf("M*L:\n");
+ (M*L).print();
+
+ M=M.transpose();
+ L=L.transpose();
+ printf("M'*L' : \n");
+ (M*L).print();
+
+ Matrix4 MV=camPtr->getCameraMatrix();
+ MV=MV;
+ 
+
+ glLoadMatrixd(MV.getPointer());
+
+
+ printf("CameraMatrix:\n");
+ camPtr->getCameraMatrix().print();
+  printf("proj\n");
+  
+  double modelview[16];
+    glGetDoublev(GL_PROJECTION_MATRIX,modelview);
+	Matrix4(modelview).print();
+
+	printf("view port:\n");
+	int viewport[4];
+	glGetIntegerv(GL_VIEWPORT,viewport);
+	Vector4(viewport).print();
+
+ // glLoadMatrixd(Matrix4( 1,0,0,0,					0,.707214,-.707214,0, 					0,.707214,.707214,-14.1443,						0,0,0,1).getPointer());
+//gluLookAt(0,10,10, 0,0,0,  0,1,0);
+//gluLookAt(-15,5,10, -5,0,0,  0,1,0.5);
+
+ //heightMap
+
+//	unsigned char* data=loadPGM("Heightmap.pgm",pgmWidth,pgmHeight);
+
+unsigned char **p2DArray;
+int HEIGHT=pgmHeight;
+int WIDTH=pgmWidth;
+
+  // Allocate memory
+  p2DArray = new unsigned char*[HEIGHT];
+  for (int i = 0; i < HEIGHT; ++i){
+    p2DArray[i] = new unsigned char[WIDTH];
+  }//end for
+
+  for(int m=0, k=0; m<=3, k<HEIGHT*WIDTH; m++)
+	{
+      for(int n=0;n<=WIDTH;n++)
+      {
+//        p2DArray[m][n] = data[k];
+        k++;
+      }//end for n
+	}//end for m,k
+
+    // draw the image	
+
+
+//glDrawPixels(pgmWidth,pgmHeight,GL_LUMINANCE,GL_UNSIGNED_BYTE,p2DArray);
+//glDrawPixels(pgmWidth,pgmHeight,GL_LUMINANCE,GL_UNSIGNED_BYTE,data);
+
+
+
+}//end drawHouse()
+
+
+int Window::width=512;int Window::height=512;
+
+
+
+//----------------------------------------------------------------------------
+//Process key events (ie letters)
+void Window::processNormalKeys(unsigned char key,int x,int y)
+{
+//static Camera* camPtr=new Camera(-15,5,10,  -5,0,0,		 0,1,0.5		); //left corner top
+//static Camera* camPtr=new Camera(0,10,10,  0,0,0,	 0,1,0		); //e,d,up top front
+
+//static Camera* camPtr=new Camera(0,0,10,  0,0,0,	 0,1,0		); //camera for facing front OBJ drawings
+
+
+	printf("pressed key %c\n",key);
+	switch(key){
+	case '1'://dragon
+		objIdx=0;
+		
+		//delete(camPtr);
+		camPtr->set(0,0,10,  0,0,0,	 0,1,0		); //e,d,up top front
+		changeObj();
+
+		displayCallback();
+		break;
+	case '2': //head
+		objIdx=1;
+		//delete(camPtr);
+		camPtr->set(0,0,10,  0,0,0,	 0,1,0		); //e,d,up top front
+
+		changeObj();
+		displayCallback();
+		break;
+	case '3'://bunny
+		//delete(camPtr);
+		camPtr->set(0,0,10,  0,0,0,	 0,1,0		); //e,d,up top front
+
+		objIdx=2;
+		changeObj();
+		displayCallback();
+		break;
+
+	case 's':
+		if(isSpin){
+			isSpin=false;
+			keepDrawing=false;
+			printf("Spin mode:OFF\n");
+		}
+		else{
+			isSpin=true;
+			keepDrawing=true;
+			printf("Spin mode:ON\n");
+		}
+		displayCallback();
+		break;
+	case 'a':
+		if(isAdjust){
+			isAdjust=false;
+			printf("Adjust scale mode:OFF\n");
+		}
+		else{
+			isAdjust=true;
+			printf("Adjust scale mode:ON\n");
+		}
+		displayCallback();
+		break;
+	case 'h': //house 1
+		//delete(camPtr);
+		camPtr->set(0,10,10,  0,0,0,	 0,1,0		); //e,d,up top front
+		printf("hhhh\n");
+				objIdx=10;
+		drawHouse();
+		keepDrawing=false;
+		displayCallback();
+		break;
+	case 'j':
+		//delete(camPtr);
+		camPtr->set(-15,5,10,  -5,0,0,		 0,1,0.5		); //left corner top
+		printf("jjjj\n");
+		keepDrawing=false;
+				objIdx=11;
+		drawHouse();
+		displayCallback();
+		break;
+	case 'k':
+		//delete(camPtr);
+		camPtr->set(0,10,40,  0,0,0,		 0,1,0		); //left corner top
+		printf("kkkkj\n");
+		keepDrawing=false;
+				objIdx=11;
+		drawHouse();
+		displayCallback();
+		break;
+	}//end switch
+
+	
+}//end processNormalKeys()
+
+
+//----------------------------------------------------------------------------
+//Process key events (ie F1, up)
+void Window::processSpecialKeys(int key,int x,int y)
+{
+	
+}//end processSpecialKeys()
+
+//----------------------------------------------------------------------------
+// Callback method called when system is idle.
+void Window::idleCallback(void)
+{
+    if(keepDrawing)
+		displayCallback();    // call display routine to redraw cube
+}
+
+//----------------------------------------------------------------------------
+// Callback method called when window is resized.
+void Window::reshapeCallback(int w, int h)
+{
+  width = w;
+  height = h;
+  glViewport(0, 0, w, h);  // set new viewport size
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();//set to move w.r.t. origin
+  //left,right,bottom,top,nearVal,farVal
+  glFrustum(-10.0, 10.0, -10.0, 10.0, 10.0, 1000.0); // set perspective projection viewing frustum
+  
+  glTranslatef(0, 0, -20);
+  
+  glMatrixMode(GL_MODELVIEW);
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// Callback method called when window readraw is necessary or
+// when glutPostRedisplay() was called.
+void Window::displayCallback(void)
+{
+
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  // clear color and depth buffers
+  if(objIdx>=0 && objIdx<=5)
+  drawObj();
+  else if(objIdx==10 || objIdx==11)
+	drawHouse();
+
+
+  glFlush();  
+  glutSwapBuffers();
+
+}//end displayCallBack()
+
+
+int main(int argc, char *argv[])
+{
+
+  float specular[]  = {1.0, 1.0, 1.0, 1.0};
+  float shininess[] = {100.0};
+  float position[]  = {0.0, 10.0, 1.0, 0.0};	// lightsource position
+  
+  glutInit(&argc, argv);      	      	      // initialize GLUT
+  glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);   // open an OpenGL context with double buffering, RGB colors, and depth buffering
+  glutInitWindowSize(512,512);      // set initial window size
+  glutCreateWindow("OuRs is the FurY");    	      // open window and set window title
+  if (glutGet(GLUT_WINDOW_COLORMAP_SIZE) != 0) 
+  {
+    cerr << "Fatal Error: bad RGBA colormap size\n" << endl;
+    exit(1);
+  }
+  glEnable(GL_DEPTH_TEST);            	      // enable depth buffering
+  glClear(GL_DEPTH_BUFFER_BIT);       	      // clear depth buffer
+  glClearColor(0.0, 0.0, 0.0, 0.0);   	      // set clear color to black
+  //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);  // set polygon drawing mode to fill front and back of each polygon
+  //  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); //for wireframe
+  glShadeModel(GL_SMOOTH);             	      // set shading to smooth
+  glMatrixMode(GL_PROJECTION); 
+  
+  // Generate material properties:
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specular);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, shininess);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glEnable(GL_COLOR_MATERIAL);
+  
+  // Generate light source:
+  glLightfv(GL_LIGHT0, GL_POSITION, position);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  //glDisable(GL_LIGHTING);//FOR PROJECT2
+
+  // Install callback functions:
+  glutDisplayFunc(Window::displayCallback);
+  glutReshapeFunc(Window::reshapeCallback);
+  glutIdleFunc(Window::idleCallback);
+
+  //key entries
+  glutKeyboardFunc(Window::processNormalKeys);
+  glutSpecialFunc(Window::processSpecialKeys);
+  //initialize array of read objects
+ parseOBJs();
+  //initialize object
+  changeObj();
+  //drawObj();
+
+
+     glutMainLoop();
+
+  return 0;
+}//end main()
+
