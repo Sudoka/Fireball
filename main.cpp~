@@ -205,6 +205,8 @@ void Window::processNormalKeys(unsigned char key,int x,int y)
 	  isShader=!isShader;
 	  if(isShader){
 	    shad->bind();
+	
+	
 	    printf("Shader:ON\n");
 	  }
 	  else{
@@ -234,6 +236,7 @@ void Window::processNormalKeys(unsigned char key,int x,int y)
 	  else printf("dirLight: off\n");
 	  break;
 	case 'r': //reset
+	  fake=0;
 	  Mobj2world->setIdentity();
 	  pointLight->reset();
 	  spotLight->reset();
@@ -256,9 +259,23 @@ void Window::processSpecialKeys(int key,int x,int y)
 // Callback method called when system is idle.
 void Window::idleCallback(void)
 {
+   fake+=.005;
+
+      GLint myTime = glGetUniformLocationARB(shad->getPid(), "time");
+
+	    //	    printf("myTime=%d\n",myTime);
+	    time_t timet;
+	    time(&timet);
+	    float diff= difftime(timet,startTime); //TODO Find out why it isn't updating shader continously
+
+	    // glUniform1fARB(myTime,diff*.0025);
+	    glUniform1fARB(myTime,fake);
+
   //    if(keepDrawing)
 		displayCallback();    // call display routine to redraw cube
+	     
 		fps->update();
+
 }
 
 //----------------------------------------------------------------------------
@@ -369,12 +386,13 @@ int main(int argc, char *argv[])
   shad=new Shader(dotVert,dotFrag);
   shad->bind();
 
+
   //initialize array of read objects
  parseOBJs();
   //initialize object
   changeObj();
   //drawObj();
-
+  time(&startTime);
 
      glutMainLoop();
 

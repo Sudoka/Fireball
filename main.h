@@ -7,7 +7,7 @@
 #include "light.h"
 #include "shader.h"
 #include "fps.h"
-
+#include "SOIL.h"
 
 void parseOBJs();
 void mouseClick(int,int,int,int);
@@ -17,6 +17,8 @@ void changeObj();
 void drawCube();
 void drawSphere();
 void drawObj();
+unsigned char* loadPPM(const char* filename, int& width, int& height);
+void loadTexture();
 
 using namespace std;
 #include<string>
@@ -85,6 +87,11 @@ Light* dirLight=new Light(5,5,5,0,
 Fps* fps= new Fps();
 time_t startTime;
 float fake=0.0; // use for fake time counter
+
+const int num_textures=2;
+GLuint textures[num_textures];
+GLuint mytexture;
+
 
 //Parses through all the OBJ files and stores in an array
 void parseOBJs()
@@ -283,11 +290,18 @@ void mouseDrag(int x, int y) {
   
 void drawCube(){
 
-  
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D,textures[0]);//TODO can change to textures[1] for diff img of PPM, textures[0] is SOIL's
   // Draw sides of cube in object coordinate system:
   glBegin(GL_QUADS);
-  glColor3f(139.0f/256.0f,  119.0f/256.0f,   101.0f/256.0f);
-
+  //glColor3f(139.0f/256.0f,  119.0f/256.0f,   101.0f/256.0f);
+  glColor3f(1,1,1);
+  glTexCoord2f(0, 1); glVertex3f(-2, -1, 0);
+  glTexCoord2f(1, 1); glVertex3f(2, -1, 0);
+  glTexCoord2f(1, 0); glVertex3f(2, 1, 0);
+  glTexCoord2f(0, 0); glVertex3f(-2, 1, 0);
+  glEnd();
+  /*
   // Draw front face:
   glNormal3f(0.0, 0.0, 1.0);   
   glVertex3f(-5.0,  5.0,  5.0);
@@ -331,10 +345,103 @@ void drawCube(){
   glVertex3f(-5.0, -5.0,  5.0);
   glEnd();
   
-
+  */
 
 }//end drawCube()
 
 void drawSphere(){
   glutSolidSphere(2.0,200,200);
 }//end drawSphere()
+
+unsigned char* loadPPM(const char* filename, int& width, int& height){
+
+  const int BUFSIZE = 128;
+  FILE* fp;
+  unsigned int read;
+  unsigned char* rawData;
+  char buf[3][BUFSIZE];
+  char* retval_fgets;
+  size_t retval_sscanf;
+
+  if ( (fp=fopen(filename, "rb")) == NULL)
+    {
+      std::cerr << "error reading ppm file, could not locate " << filename << std::endl;
+      width = 0;
+      height = 0;
+      return NULL;
+    }
+
+  // Read magic number:
+  retval_fgets = fgets(buf[0], BUFSIZE, fp);
+
+  // Read width and height:
+  do
+    {
+      retval_fgets=fgets(buf[0], BUFSIZE, fp);
+    } while (buf[0][0] == '#');
+  retval_sscanf=sscanf(buf[0], "%s %s", buf[1], buf[2]);
+  width  = atoi(buf[1]);
+  height = atoi(buf[2]);
+
+  // Read maxval:
+  do
+    {
+      retval_fgets=fgets(buf[0], BUFSIZE, fp);
+    } while (buf[0][0] == '#');
+
+  // Read image data:
+  rawData = new unsigned char[width * height * 3];
+  read = fread(rawData, width * height * 3, 1, fp);
+  fclose(fp);
+  if (read != 1)
+    {
+      std::cerr << "error parsing ppm file, incomplete data" << std::endl;
+      delete[] rawData;
+      width = 0;
+      height = 0;
+      return NULL;
+    }
+
+  return rawData;
+}//end loadPPM
+
+//const int num_textures=2;
+//GLuint textures[num_textures];
+//GLuint mytexture;
+void loadTexture(){
+  glGenTextures(num_textures, &textures[0]);  
+ printf("HEHEHE\n");
+ ////using the SOIL function one shot function
+   textures[0] = SOIL_load_OGL_texture
+      (
+	"explosion.png", SOIL_LOAD_AUTO,
+	textures[0],//SOIL_CREATE_NEW_ID,
+	SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_NTSC_SAFE_RGB | SOIL_FLAG_COMPRESS_TO_DXT
+       );
+    
+
+
+  for(int i=1;i<num_textures;i++){
+    glBindTexture(GL_TEXTURE_2D, textures[i]);  
+   
+
+    int twidth, theight;
+    unsigned char* tdata;
+    
+    //tdata = loadPPM("explosion.ppm", twidth, theight);
+       tdata = loadPPM("baratheon.ppm", twidth, theight);
+    if(tdata==NULL){
+      printf("Null PPM\n");
+      return;
+    }    
+    
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+    
+    glTexImage2D(GL_TEXTURE_2D, 0 , 3, twidth, theight, 0, GL_RGB, GL_UNSIGNED_BYTE, tdata);
+    delete [] tdata;
+
+  }//end for
+      
+  glEnable(GL_TEXTURE_2D);
+}//end loadTexture

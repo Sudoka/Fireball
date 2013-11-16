@@ -122,10 +122,12 @@ void main(){
     
     vec3 normal = gl_Normal.xyz;//normalize(gl_NormalMatrix * gl_Normal);   
     vec3 position = gl_Vertex.xyz;
-
-    noise = .5* turbulence(0.5 * normal+time);
-    float b = 1.0 * pnoise( 0.05 * position + vec3(2.0*time), vec3( 100.0 ) );
-    float displacement = 2.5 * noise + b;
+    
+    float a = 2.5;
+    noise = turbulence(0.5 * normal+time);
+    float b = 1.0; 
+    float perlin = pnoise( 0.05 * position + vec3(2.0*time), vec3( 100.0 ) );
+    float displacement = a * noise + b* perlin;
 
 
     vec3 newPosition = position + normal * displacement;

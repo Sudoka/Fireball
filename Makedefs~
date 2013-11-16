@@ -10,7 +10,7 @@ INCDIRS		= -I/usr/X11R6/include
 #use the following LIBS line for GNU/Linux
 #LIBS	 	= -lm -lX11 -lXmu -lXi -lXext -lGL -lGLU -lglut
 #use this one instead for Mac OSX
-LIBS		= -lm -framework GLUT --lobjc -framework OpenGL -lSOIL -framework CoreFoundation  #run 'make install' from the SOIL.zip
+LIBS		= -lm -framework GLUT --lobjc -framework OpenGL -lSOIL -framework CoreFoundation 
 LIBDIRS 	= -L. -L/usr/X11R6/lib -L/usr/lib 
 LDFLAGS		= -O3 $(LIBDIRS) $(LIBS)
 CFLAGS          = $(INCDIRS) -O3 -fomit-frame-pointer \

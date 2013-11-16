@@ -205,7 +205,7 @@ void Window::processNormalKeys(unsigned char key,int x,int y)
 	  isShader=!isShader;
 	  if(isShader){
 	    shad->bind();
-	
+	    
 	
 	    printf("Shader:ON\n");
 	  }
@@ -259,21 +259,24 @@ void Window::processSpecialKeys(int key,int x,int y)
 // Callback method called when system is idle.
 void Window::idleCallback(void)
 {
-   fake+=.005;
+  fake+=.005;
+  GLint myTime = glGetUniformLocationARB(shad->getPid(), "time");
+  time_t timet;
+  time(&timet);
+  float diff= difftime(timet,startTime); 
+    // glUniform1fARB(myTime,diff*.0025);
+  glUniform1fARB(myTime,fake);
 
-      GLint myTime = glGetUniformLocationARB(shad->getPid(), "time");
 
-	    //	    printf("myTime=%d\n",myTime);
-	    time_t timet;
-	    time(&timet);
-	    float diff= difftime(timet,startTime); //TODO Find out why it isn't updating shader continously
-
-	    // glUniform1fARB(myTime,diff*.0025);
-	    glUniform1fARB(myTime,fake);
-
+  glActiveTexture(GL_TEXTURE0);
+  int tex_loc = glGetUniformLocationARB(shad->getPid(), "tExplosion");
+  glUniform1i(tex_loc,0);
+  glBindTexture(GL_TEXTURE_2D, textures[0]);
+  //glBindTexture(GL_TEXTURE_2D, mytexture);//using SOIL
+  
   //    if(keepDrawing)
-		displayCallback();    // call display routine to redraw cube
-	     
+  displayCallback();    // call display routine to redraw cube
+  
 		fps->update();
 
 }
@@ -388,13 +391,14 @@ int main(int argc, char *argv[])
 
 
   //initialize array of read objects
- parseOBJs();
+  parseOBJs();
   //initialize object
   changeObj();
   //drawObj();
   time(&startTime);
+  loadTexture();
 
-     glutMainLoop();
+  glutMainLoop();
 
   return 0;
 }//end main()

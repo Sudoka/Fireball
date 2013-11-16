@@ -83,6 +83,8 @@ Light* dirLight=new Light(5,5,5,0,
 
 
 Fps* fps= new Fps();
+time_t startTime;
+float fake=0.0; // use for fake time counter
 
 //Parses through all the OBJ files and stores in an array
 void parseOBJs()
